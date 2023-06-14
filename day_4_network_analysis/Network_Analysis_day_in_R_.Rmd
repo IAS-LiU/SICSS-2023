@@ -1,0 +1,578 @@
+---
+title: '# SICSS Norrköping 2023: Network Analysis (EXERCISE SHEET)'
+author: "Alexandra Rottenkolber"
+date: "2023-06-15"
+output: html_document
+---
+
+## Introduction & getting started
+
+Welcome to the practical part of the network analysis day! 
+In this session, you will get an introduction to how to represent a network with the help of R (or Python, see other script), how to calculate basic network descriptives (on the micro, meso and macro level), and how to put on the "network thinking hat". You are invited to work through the exercise sheet on your own/in groups, and with the help of mine and Carl where needed. If you are already familiar with some aspects of the lab, feel free to jump over certain sections or go straight to the exercise part. 
+
+
+**Learning goals for this workshop**
+
+1. Introduction
+- Represent a network in R (with IGRAPH)
+- Create a graph from scratch (add nodes, edges, attributes) 
+- Visualise it
+
+2. Basic network descriptives
+- macro-level descriptives
+- meso-level descriptives
+- micro-level descriptives
+
+3. Network thinking
+- Majority illusion
+- Friendship paradox
+
+
+### Introduction 
+
+**Getting started.** First, we need to install the most important packages for network analysis in R.  
+There are plenty of R packages for network analysis available, which are tailored to perform different types of analysis. The most important ones for the beginning are
+
+- "sna" 
+- "igraph"
+- "network"
+- "ggraph"  for visualisations (uses ggplot2)
+- "egor"  for ego-nets (uses igraph objects)
+- "netseg"  for assortativity patterns, homophily, segregation, within-group mixing, etc.
+- "isnar"
+- "networkdata" a large sample of networks in igraph format (to install network data, see: https://github.com/schochastics/networkdata)
+- "igraphdata" several network datasets
+- etc.
+
+To install the packages you need, you can simply type the name of the package within `install.packages("")`, e.g.
+`install.packages(c('sna','igraph'))`
+`install.packages("isnar")`
+
+```{r setup, include=FALSE}
+#install.packages(c('sna','igraph'), repos = "http://cran.us.r-project.org")
+#install.packages("igraphdata")
+
+library(sna)
+library(igraph)
+library(igraphdata)
+
+library(dplyr)
+library(tidyr)
+```
+
+### Creating a graph object
+
+The most widely used R packages for (simply) network analysis are called `sna` and `igraph`. 
+To create a graph object, SNA works with matrices as inputs, while this is not the case for IGRAPH. IGRAPH requires igraph objects as inputs. 
+
+```{r martices}
+# In SNA, the basic element is the MATRIX
+mtx <- matrix(c(0, 1, 0, 0, 0, 0, 0,
+                1, 0, 1, 1, 1, 0, 0,
+                1, 1, 0, 0, 0, 0, 0,
+                0, 1, 0, 0, 1, 0, 0,
+                0, 1, 0, 1, 0, 1, 1,
+                0, 0, 0, 0, 1, 0, 1,
+                0, 0, 0, 0, 1, 1, 0),
+              nrow=7,
+              ncol=7,
+              byrow=TRUE)
+mtx
+
+class(mtx) # An array is a n-dimensional object
+dim(mtx) # Shows dimensions of the matrix. Here, we have a 7x7 matrix.
+
+# Usually, we would like to label the dimensions
+dimnames(mtx) <- list(c('Kira','Amaya','Rohan', 'Robin', 'Hanna', 'Adam', 'Igor'),c('Kira','Amaya','Rohan','David', 'Hanna', 'Adam', 'Igor'))
+mtx
+
+# We can access each element of a matrix separately
+mtx[1,2] # first row, second column
+mtx['Adam','Igor'] # sixth row, seventh column
+
+# And we can replace elements by assigning a new value
+mtx[3,1] <- 0 # Assigns 0 to the element in the 3rd row, 1st column
+mtx
+
+# In social network analysis, the diagonal of a matrix is often set to NA. If done so it indicates that self-loops cannot exist per definition and aren't just not present in the data.
+diag(mtx) # Returns the elements in positions (1,1),... (n,n)
+diag(mtx) <- NA 
+mtx
+
+```
+
+This matrix could already be interpreted as representing a network (This format is called a network's _adjacency martix_.). Say the values indicate whether a person i (in the rows) is in contact with another person (in the columns) on a regular basis. How would you interpret the network? 
+
+#### Visualising a network
+
+```{r visualisation}
+gplot(mtx,displaylabels = TRUE)
+
+#plot.igraph(mtx) # this will throw an error 
+grph <- graph_from_adjacency_matrix(mtx, mode='undirected') # create a graph object from our martix
+plot.igraph(grph)
+```
+
+#### Adding nodes and edges
+
+There are several ways how to create a graph from scratch. Either you set up an adjacency matrix as shown above. Or you use an edge list as an input or add nodes and edges separately, as shown below. 
+
+```{r nodes and edges}
+# use and edge list as an input for an undirected graph
+g_undirected <- graph.formula(1-2, 2-3, 2-4, 2-5, 4-5, 5-6, 5-7, 6-7) 
+g_undirected
+
+# or start with an empty graph and add nodes and edges separately
+g_undirected_2 <- make_empty_graph(directed = FALSE) # empty graph
+g_undirected_2 <- add_vertices(g_undirected_2, 2) # add nodes
+plot(g_undirected_2)
+
+# you can also use the pipe operator and do several steps at once
+g_undirected_2 <- g_undirected_2 %>% 
+  add_vertices(7, color = "red") %>% # you can input attributes in this statement, too
+  add_edges(c(2,6, 7,8, 7,9, 8,9))
+plot(g_undirected_2)
+
+# For a directed graph: 
+# use (-+, +-, or ++) to indicate the arrow ends (with a +)
+g_directed <- graph.formula(1+-2, 2-+3, 2+-4, 2++5, 4+-5, 5-+6, 5++7, 6++7)  # plus sign captures the arrow end
+g_directed
+plot(g_directed)
+
+# With V() and E() the nodes (vertices) and ties (edges) can be accessed. 
+V(g_directed) # nodes/vertices
+E(g_directed) # ties/edges
+
+# Let's rename the nodes
+V(g_undirected)$name <- c('Kira','Amaya','Rohan', 'Robin', 'Hanna', 'Adam', 'Igor')
+g_undirected
+plot(g_undirected)
+
+# Even add additional attributes // store attributes on top of the original matrix
+V(g_undirected)$gender <- c('f','f','m','d','f','m','m')
+g_undirected
+plot(g_undirected,
+     vertex.color= ifelse(V(g_undirected)$gender == "m","steelblue", NA))
+vcount(g_undirected) # count vertices
+
+# Attributes to edges are also possible
+ecount(g_undirected) # remember it is 10 ties we have
+E(g_undirected)$strength <- c(1,5,1,1,8,1,4,5)
+g_undirected
+
+plot(g_undirected,
+     vertex.color= ifelse(V(g_undirected)$gender == "m","steelblue", 
+                         (ifelse(V(g_undirected)$gender == "f", "yellow", "lightgreen"))), 
+     edge.width=E(g_undirected)$strength)
+```
+
+
+For the next few sections, we will use Zachary’s Karate Club graph as an example network. Zachary’s Karate Club is a very famous network from the social network analysis discipline ([this](https://www.pnas.org/doi/full/10.1073/pnas.122653799) is the paper that made it famous, [this](https://www.jstor.org/stable/pdf/3629752.pdf?casa_token=g09eGs0jjiEAAAAA:iepvaiTY5ccVRvpskS0VOJsa2EoqeX2l0QEffeZ30ocwIjOUP5pn62LDKnG19MweegE3Z3lBse2vw60w9iUnRu7369NGRdWEwdoa1XPwbIH-b7igarw) is the paper (written by W. Zachary) where it stems from). 
+
+In his study, Zachary observed the friendship ties of members of a university's karate club over the duration of two years. During this time period, a disagreement occurred between the administrator of the club and the club's instructor, which led to the instructor leaving the club. He eventually founded a new club taking half of the original club's members with him. Based on the structure of the friendship network, Zachary was able to predict almost exactly which of the two clubs people would join after the split.
+
+This network is so famous that it can be pulled from IGRAPHDATA. You can simply call it by invoking `data(karate)`. 
+
+## Basic network descriptives
+
+### Macro level (global level): 
+Summary statistics, such as
+- size, and average degree, degree distribution
+- average clustering
+- transitivity 
+
+#### Size and degrees
+
+```{r size and degree}
+data(karate) # data is loaded into a variable called karate
+
+plot(karate)
+
+# number of nodes
+V(karate)
+vcount(karate)
+
+# number of edges
+E(karate)
+ecount(karate)
+
+# degrees 
+#igraph::degree(karate)
+
+# degree distribution 
+hist(igraph::degree(karate))
+
+```
+
+
+#### Transitivity and average clustering coefficient 
+
+Often useful descriptives at the macro level is the transitivity coefficient and the average clustering coefficient (clustering coefficients also exist at the local (node-) level). Transitivity describes how many of the existing triads are actually closed. The average clustering coefficient describes -- as the name already indicates -- the average of all nodes' clustering coefficient. The node-level clustering coefficient describes the fraction of possible triangles through a node that actually exists.
+
+
+```{r transitivity, average clustering}
+
+adj_mtx_karate <- as.matrix(as_adj(karate, sparse = igraph_opt("sparsematrices"))) # convert igraph object to matrix (as sna package functions take matrices as input)
+
+sna::isolates(adj_mtx_karate) # Check for isolates
+sna::gden(adj_mtx_karate) # Density (Number of actual ties over Number of potential ties)
+
+igraph::transitivity(karate, type = "average") # Transitivity (how many of existing relationship are closed (triangles))
+mean(igraph::transitivity(karate, type = "local"), na.rm = TRUE) # average of the fractions of possible triangles through nodes that actually exists.
+
+# Dyadic and triadic configurations
+sna::dyad.census(adj_mtx_karate) # number of ties that are mutual, asymmetric, do not exist
+sna::triad.census(adj_mtx_karate) # see: https://i.stack.imgur.com/9Xo0R.png 
+```
+
+
+### Meso level (everything 'in between'): 
+A group of nodes' characteristics live at the mesoscale, such as
+- community detection 
+- homophily
+- assortativity
+
+#### Community detection 
+
+Community detection is a very large field of research and has received a lot of attention in the past. The wish behind community detection basically is to identify a network's mesoscale organisation. In simplistic terms, a community is a group of nodes which are somewhat more related to each other than to others in the network. Community detection for networks is conceptually similar to data clustering in machine learning. It is helpful if one wants to find nodes that would, for example, react similarly to an external stimulus or if you want to visualize the meso-level organisation of a network. 
+
+There are many different algorithms out there to find communities: Some use a group's internal density, the similarity to neighbours, or the idea of random walks, ... As some of the approaches out there differ in their internal logic, they might yield slightly different results. 
+
+IGRAPH has some community detection algorithms built-in, which you can find [here](https://networkx.org/documentation/stable/reference/algorithms/community.html), and which we will use in the following. 
+
+
+```{r community detection}
+
+# GIRVAN-NEWMAN
+# Partitioning is based on edge betweeness. 
+gn_clustering <- cluster_edge_betweenness(karate,modularity=TRUE,membership=TRUE)
+gn_clustering
+gn_clustering$modularity
+# Communities are identified as components in the edge-pruned graph 
+# The partitioning where the modularity is the highest is the one that gets chosen at the end.
+
+# WALKTRAP
+# The walk trap algorithm is based on a series of short random walks. 
+# Random walks are hypothesized to stay within the same community.
+walk_clustering <- cluster_walktrap(karate,step=10)
+walk_clustering
+
+# MOODY-WHITE
+blocks_clustering <- cohesive_blocks(karate)
+blocks_clustering$blocks
+
+# Other clustering algorithms that you could use:
+cluster_louvain(karate)
+cluster_fast_greedy(karate)
+cluster_leading_eigen(karate)
+
+# How to extract the grouping
+gn_clustering$membership
+
+V(karate)$gn_group <- as.factor(gn_clustering$membership)
+V(karate)$wt_group <- as.factor(walk_clustering$membership)
+V(karate)$fg_group <- as.factor(cluster_fast_greedy(karate)$membership)
+
+V(karate)$fg_group
+
+# Add clustering to the visualisation
+par(mfrow=c(2,3))
+set_layout <- layout_with_fr(karate)
+
+plot(karate,
+     vertex.color = ifelse(V(karate)$color==1,'gold','steelblue'),
+     #vertex.label = V(karate)$name,
+     vertex.label = NA, 
+     main='Girvan-Newman',
+     mark.groups = cluster_edge_betweenness(karate),
+     mark.border=NA, 
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = ifelse(V(karate)$color==1,'gold','steelblue'),
+     #vertex.label = V(karate)$name,
+     vertex.label = NA, 
+     main='Walktrap',
+     mark.groups = cluster_walktrap(karate),
+     mark.border=NA, 
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = ifelse(V(karate)$color==1,'gold','steelblue'),
+     #vertex.label = V(karate)$name,
+     vertex.label = NA, 
+     main='Fast greedy',
+     mark.groups = cluster_fast_greedy(karate),
+     mark.border=NA, 
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = ifelse(V(karate)$color==1,'gold','steelblue'),
+     #vertex.label = V(karate)$name,
+     vertex.label = NA, 
+     main='Louvain',
+     mark.groups = cluster_louvain(karate),
+     mark.border=NA, 
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = ifelse(V(karate)$color==1,'gold','steelblue'),
+     #vertex.label = V(karate)$name,
+     vertex.label = NA, 
+     main='Leading eigen',
+     mark.groups = cluster_leading_eigen(karate),
+     mark.border=NA, 
+     layout = set_layout)
+
+```
+
+
+**What did you observe?**
+
+Probably you found that the results are quite different. Was there even a single pair of algorithms that returned exactly the same partitions?
+
+There are different ways to continue from this finding: One option is to evaluate the partitioning based on some quality measure (e.g. the "modularity score", or the "Normalised Mutual Information"). Another option would be to apply "[consensus clustering](https://www.nature.com/articles/srep00336)" -- an approach inspired by an observation from machine learning which can be summarised as 'averaging several simple models often yields better accuracy than constructing the most sophisticated model possible'. 
+The idea is very simple: Run several clustering algorithms (also the same one many times) and average the results. However, this method should not be applied blindly: Make sure the results you are averaging stem from an internally consistent ensemble of clustering algorithms (i.e. the same "family", meaning: all algorithms apply the same logic. For example, don't mix flow-based (infomap and co) with density optimization algorithms, etc.).
+
+#### Quantifying homophily: Assortativity coefficient
+
+At the meso-level, we could also be interested in quantifying the extent to which homophily is driving a network's connections. This is where the assortativity coefficient can help us. The idea behind this measure is a comparison of the number of ties that occur in-goup vs such that bridge to another group compared to the total number of ties. The assortativity coefficient, however, is a bit more advanced than this simple illustration: It is able to take different group sizes/more than two groups into account. For the assortativity coefficient, 1 means perfect assortativity (assortativity: more in-group than between group ties), -1 means perfect disassortativity (disassortativity: more between group than in-group ties).
+
+```{r homophily}
+# Assortativity (for continuous (quantitative) attributes)
+assortativity_degree(karate,directed=FALSE) # degree assortativity 
+
+# Assortativity for qualitative attributes
+isnar::assort(karate,'color')
+```
+
+Here we find the Karate network to be assorted by 'support' meaning that there is not to much mixing among support groups.
+
+### Micro level (local level): 
+
+Node level characteristics such as
+- centrality measures (degree centrality, betweenness centrality, closeness centrality, pagerank)
+- nodes' degrees
+
+On the micro-level, we are usually interested in the question: Which are the important nodes? In which way are they important?
+
+To answer this question, we could start looking at the degree of a node, assuming that the ones with the most links are most likely the most important ones. But what if we want to measure another "type of importance", e.g. if a node has a bridging functionality (critical for example, for information flow, exchange, exposure, etc.)? Such a node probably has a very small degree, but if it were gone, the topology of the network would be substantially different.
+
+To capture these different qualities, we have different measures at hand (usually summarised as centrality measures). The most important ones are closeness centrality, betweenness centrality, and PageRank, and the local clustering coefficients. IGRAPH and SNA have the most important algorithms readily implemented.
+
+```{r centrality measures}
+# Centrality measures
+degree(karate) # degree
+betweenness(karate) # betweenness centrality 
+#closeness(karate) # closeness centrality
+#page_rank(karate)$vector # pagerank
+#transitivity(karate, type = "local") # local clustering coefficient
+
+# Visualisation
+#
+# Assign centrality score as attribute, example here is betweenness centrality
+V(karate)$bcentrality <- betweenness(karate, directed=FALSE, weights=NA)
+V(karate)$dcentrality <- degree(karate)
+V(karate)$ccentrality <- closeness(karate)
+V(karate)$pcentrality <- page_rank(karate)$vector
+
+hist(V(karate)$bcentrality)
+
+# Normalise values to get a ranking
+normalize <- function(x){(x-min(x))/(max(x)-min(x))} # min-max scaling brings everything to the interval [0,1] 
+V(karate)$bcentrality_index <- round(normalize(V(karate)$bcentrality)*9)+1 # this adjustment returns values between [1, 10] 
+V(karate)$bcentrality_index
+
+# Map 10 colors to the 10 centrality-measure categories
+V(karate)$bcolor_centrality <- colorRampPalette(c("steelblue", "gold","darkred"))(10)[V(karate)$bcentrality_index]
+
+# Look at what we did
+table(V(karate)$bcolor_centrality)
+
+# do it for the others, too
+V(karate)$ccentrality_index <- round(normalize(V(karate)$ccentrality)*9)+1 # this adjustment returns values between [1, 10] 
+V(karate)$ccolor_centrality <- colorRampPalette(c("steelblue", "gold","darkred"))(10)[V(karate)$ccentrality_index] # Map 10 colors to the 10 centrality-measure categories
+
+V(karate)$dcentrality_index <- round(normalize(V(karate)$dcentrality)*9)+1 # this adjustment returns values between [1, 10] 
+V(karate)$dcolor_centrality <- colorRampPalette(c("steelblue", "gold","darkred"))(10)[V(karate)$dcentrality_index] # Map 10 colors to the 10 centrality-measure categories
+
+V(karate)$pcentrality_index <- round(normalize(V(karate)$pcentrality)*9)+1 # this adjustment returns values between [1, 10] 
+V(karate)$pcolor_centrality <- colorRampPalette(c("steelblue", "gold","darkred"))(10)[V(karate)$pcentrality_index] # Map 10 colors to the 10 centrality-measure categories
+
+par(mfrow=c(2,2))
+
+# plot
+plot(karate,
+     vertex.color = V(karate)$dcolor_centrality,
+     vertex.label=NA,
+     vertex.size=12, 
+     main='Degree centrality',
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = V(karate)$ccolor_centrality,
+     vertex.label=NA,
+     vertex.size=12, 
+     main='Closeness centrality',
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = V(karate)$bcolor_centrality,
+     vertex.label=NA,
+     vertex.size=12, 
+     main='Betweenness centrality',
+     layout = set_layout)
+
+plot(karate,
+     vertex.color = V(karate)$pcolor_centrality,
+     vertex.label=NA,
+     vertex.size=12, 
+     main='Pagerank',
+     layout = set_layout)
+```
+
+
+## Network thinking 
+
+This section aims at stimulating your network thinking. You will discover two network peculiarities that might appear counterintuitive at first glance, but make a lot of sense once you take the networks' topologies into consideration. 
+
+### Majority illusion
+
+In networks where we observe strong homophily, it might happen that we observe something like the "illusion of a majority": Even if the majority does not hold a certain characteristic, we can draw a network in which most people believe the opposite is true. 
+
+Let's look at an easy example. We can use our simple friendship network from above, which is in the variable `g_undirected`. In this network, nodes represent friends who are assigned one attribute (their gender). 
+
+
+To test for the majority illusion, we need to compare the average of the gender shares in all ego networks to the global gender share. Hence, we first have to iterate over all ego networks (one network per friend), remove the ego node for each ego network, and calculate the share of female friends a person "sees" in their ego network. Then, we need to average the perceived gender share among all nodes.
+In a second step, we need to calculate the gender shares in the friendship network from a global perspective. 
+
+Let's extract an ego network for one person, for example, Amaya 
+
+```{r majority illusion friendship network -- ego perspective}
+
+mtx_friends <- as.matrix(as_adj(g_undirected, sparse = igraph_opt("sparsematrices"))) # get out friendship matrix (the one we constructed ealier)
+genders <- V(g_undirected)$gender
+names <- V(g_undirected)$name
+
+ego_networks <- sna::ego.extract(mtx_friends, ego = NULL, neighborhood = c("combined"))
+friends_of_ego <- colnames(ego_networks$Amaya)[colnames(ego_networks$Amaya) != "Amaya"]
+
+# get gender shares in ego network
+prop.table(table(V(g_undirected)$gender[which(V(g_undirected)$name %in% friends_of_ego)]))
+
+# calculation of gender shares in terms of local averages
+# ...
+
+```
+
+```{r Global perspective}
+
+# calculation of the gender shares from a global perspective
+# ...
+```
+
+
+#### Exercise 1: 
+
+What do you observe? Why do you see what you see? 
+
+YOUR COMMENTS HERE
+
+#### Exercise 2 (Extra): Reflections on the majority illusion 
+
+(1) Which implications does this phenomenon, in your opinion, have for social cohesion? Or the "public opinion"? Political influence? ...?
+
+(2) The majority illusion is only one peculiarity. Another stunning case, driven by homophily, that I want to bring to your attention is that even mild preferences often result in very strict homophilic patterns (along the lines of "the aggregate is more than the sum (of individual-level preferences)"). One of the most famous examples to illustrate this segregation (see work of Nobel Prize-winning game theorist Thomas Schelling, and especially his paper [Dynamic models of segregation](https://www.stat.berkeley.edu/~aldous/157/Papers/Schelling_Seg_Models.pdf) from 1971). You can play an interactive version of the paper content here: [Parable of Polygons](https://ncase.me/polygons/). Even if people are happy being in the minority, the group ends up being segregated. Comment: There is no network in this interactive post, but one could easily transfer this to a friendship network where people are allowed to rewire their connections. 
+
+YOUR COMMENTS HERE
+
+#### Exercise 3: Blog posts
+
+For this exercise, we will use some (a bit more exiting) real-world data. Precisely, the dataset from this [article](https://dl.acm.org/doi/pdf/10.1145/1134271.1134277?casa_token=4s9yFKDhE2oAAAAA:8k4b1uqozQwxn4DBIg0lDn9v0DnP07KxgYMyPYRtvmlwdf3i-8yMfpd41C74GAkFuGiRRKb9OYSuxw). 
+The dataset contains front-page hyperlinks (edges) between blogs (nodes) in the context of the 2004 US election (directed network). The dataset is available [here](http://konect.cc/networks/moreno_blogs/).
+
+(1) Load the data (edges stored in `edges_blogs.txt`) and assign the labels (stored in `node_labels_blogs.txt`) to every node. 
+
+(2) Repeat the steps as in Exercise 1. Do you find a majority illusion here, too? 
+
+```{r blog post}
+df1_graph <- read.table("./data/edges_blogs.txt", sep="\t", header=FALSE)
+df2_nodes_attributes <- read.table("./data/node_labels_blogs.txt", sep="\t", header=FALSE)
+
+colnames(df1_graph) <- c("node1", "node2")
+colnames(df2_nodes_attributes) <- c("node", "attribute")
+
+
+g_blogs <- graph_from_data_frame(df1_graph, directed=FALSE)
+#g_blogs <- set_vertex_attr(G1, "leaning", index = V(G1), df2_nodes_attributes$attribute)
+ecount(g_blogs)
+vcount(g_blogs)
+edge_density(g_blogs)
+transitivity(g_blogs)
+is_directed(g_blogs)
+
+for (node in V(g_blogs)) {
+  attribute <- df2_nodes_attributes[df2_nodes_attributes$node == node, "attribute"]
+  g_blogs <- set_vertex_attr(graph = g_blogs, name = "leaning", index = node, value = as.character(attribute))
+}
+
+# average of the local perspectives
+# ...
+
+# global perspective 
+# ...
+```
+
+
+
+
+### The friendship paradox
+
+#### Exercise 4: 
+
+It's time for the next peculiarity of network effects: The friendship paradox. 
+
+For this exercise, we will use the data from the following [paper](https://dl.acm.org/doi/pdf/10.1145/1592665.1592675): 
+Viswanath, B., Mislove, A., Cha, M., & Gummadi, K. P. (2009). On the evolution of user interaction in Facebook. Proceedings of the 2nd ACM Workshop on Online Social Networks, 37–42. 
+
+You can find it in the data folder under the name `data-facebook.txt`. 
+
+(1) Read in the data, and construct your graph. 
+
+(2) This time, we are not interested in the assortativity by age, but rather in assortativity by number of friends (i.e. the degree assortativity). Generate a plot that shows the average number of the friends of a person's friends against the number of this person's friends. Add the identity line (line that goes through (0,0) and (1,1)). 
+
+(3) Persons above the identity line have fewer friends than their average neighbour, while nodes below the identity line have more. The friendship paradox states that most nodes have fewer friends than their friends' average. Can you check whether the friendship paradox is also at play in the Facebook network? (Hint: One needs to count the number of nodes above and below the identity line and to compare the size of both groups.)
+
+(4) Calculate the degree assortativity.
+
+```{r friendship paradox}
+
+df2_graph <- read.table("./data/data_facebook.txt", sep=" ", header=FALSE)
+colnames(df2_graph) <- c("node1", "node2")
+
+g_facebook <- graph_from_data_frame(df2_graph, directed=FALSE)
+
+vcount(g_facebook)
+ecount(g_facebook)
+
+# Get the degrees of the nodes
+# ...
+
+# calculate how many friends and ego's friends have on average
+# ...
+
+# Plot the data
+# ...
+
+# Count the number of nodes above and below the identity line
+# ...
+
+# Check for the friendship paradox
+# ...
+```
+
+
+
+
+
+
