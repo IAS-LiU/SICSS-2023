@@ -1,0 +1,361 @@
+---
+title: "workshop-scraping"
+author: "Maël Lecoursonnais & Alexandra Rottenkolber"
+date: "2023-06-09"
+output: html_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{css, echo = FALSE}
+  body{
+  font-size: 13pt;
+}
+```
+
+> This lab and the solutions are available here: https://github.com/maellecoursonnais/SICSS-IAS/tree/main/workshop-scraping. 
+
+In this first part, we are going to see how to access data from the web. There are mainly two ways to do this: either by reading the HMTL code linked to a webpage, or by accessing the data through an API.
+
+In both cases, we extract data in formats that are not directly readable by R, so we need to be able to convert those in desirable formats.
+
+# 00. Things we are not covering today
+Web scraping encompasses a lot of methods, and today we'll be focusing on simple cases. We will not cover user simulation (check `rvest::html_session`), `RSelenium`, or forms (check `rvest::html_form_set`). There is a ton of documentation on those if you want to dig more! 
+
+
+# 01. Scraping the web from scratch
+
+Since most the web is written in HTML, scraping the web from scratch requires to know a little bit of HTML. So here's a HTML 101:
+
+## HTML 101
+
+> This section is taken from Felix Lennert's [CSS Toolbox bookdown](https://bookdown.org/f_lennert/book-toolbox_css/).
+
+Web content is usually written in HTML (**H**yper **T**ext **M**arkup **L**anguage). An HTML document is comprised of elements that are letting its content appear in a certain way.
+
+![The tree-like structure of an HTML document](https://www.w3schools.com/js/pic_htmltree.gif)
+
+The way these elements look is defined by so-called tags.
+
+![](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics/grumpy-cat-small.png)
+
+The opening tag is the name of the element (`p` in this case) in angle brackets, and the closing tag is the same with a forward slash before the name. `p` stands for a paragraph element and would look like this (since RMarkdown can handle HTML tags, the second line will showcase how it would appear on a web page:
+
+`<p> My cat is very grumpy. <p/>`
+
+<p>
+
+My cat is very grumpy.
+
+<p/>
+
+The `<p>` tag makes sure that the text is standing by itself and that a line break is included thereafter:
+
+`<p>My cat is very grumpy</p>. And so is my dog.` would look like this:
+
+<p>My cat is very grumpy</p>
+
+. And so is my dog.
+
+There do exist many types of tags indicating different kinds of elements (about 100). Every page must be in an `<html>` element with two children `<head>` and `<body>`. The former contains the page title and some metadata, the latter the contents you are seeing in your browser. So-called **block tags**, e.g., `<h1>` (heading 1), `<p>` (paragraph), or `<ol>` (ordered list), structure the page. **Inline tags** (`<b>` -- bold, `<a>` -- link) format text inside block tags.
+
+You can nest elements, e.g., if you want to make certain things bold, you can wrap text in `<b>`:
+
+<p>My cat is <b> very </b> grumpy</p>
+
+Then, the `<b>` element is considered the *child* of the `<p>` element.
+
+Elements can also bear attributes:
+
+![](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics/grumpy-cat-attribute-small.png)
+
+Those attributes will not appear in the actual content. Moreover, they are super-handy for us as scrapers. Here, `class` is the attribute name and `"editor-note"` the value. Another important attribute is `id`. Combined with CSS, they control the appearance of the element on the actual page. A `class` can be used by multiple HTML elements whereas an `id` is unique.
+
+## Read a webpage in R
+
+To read a webpage, we can use the `rvest` and `xml2` packages. `xml2::read_html` reads a HTML page from a URL or HTML file.
+
+Here's a depiction of the usual workflow:
+
+![](https://raw.githubusercontent.com/yusuzech/r-web-scraping-cheat-sheet/master/resources/functions_and_classes.png)
+
+Let's start with a minimal example:
+
+```{r}
+#install.packages("rvest")
+library(rvest) #Also loads `xml2`
+html_example <- minimal_html('
+    <html>
+    <head>
+      <title>Page title</title>
+    </head>
+    <body>
+      <h1 id="first">A heading</h1>
+      <p class="important">Some important text; <b>some bold text.</b></p>
+      
+      <h1>A second heading</h1>
+      <p id="link-sentence"> Another less important text that includes a <b><a href="https://example.com">link</a></b>. </p>
+      
+      <h2 class="important">Another heading</h2>
+      Text outside a paragraph, but with <a href="https://example.com">another link</a>.
+    </body>
+')
+```
+
+HTML pages are complex, and even in a simple example like the one above, it can be hard to navigate and the retrieve necessary information. This is where CSS selectors and XPath come to the rescue! CSS selectors and XPath are two different ways to access information on HTML pages. Today, we will only cover CSS selectors, but know XPath exists. It is a little bit more verbose, but it can be much more efficient. 
+
+### CSS selectors
+
+This section was partly taken from [`rvest`'s documentation](https://rvest.tidyverse.org/articles/rvest.html).
+
+CSS is short for cascading style sheets, and is a tool for defining the visual styling of HTML documents. CSS includes a miniature language for selecting elements on a page called **CSS selectors**. CSS selectors define patterns for locating HTML elements, and are useful for scraping because they provide a concise way of describing which elements you want to extract.
+
+CSS selectors can be quite complex, but fortunately you only need the simplest for `rvest`, because you can also write R code for more complicated situations. The four most important selectors are:
+
+-   `p, a`: selects all `<p>` and `<a>` elements.
+
+-   `.title`: selects all elements with `class` "title".
+
+-   `p.special`: selects all `<p>` elements with `class` "special".
+
+-   `#title`: selects the element with the `id` attribute that equals "title". Id attributes must be unique within a document, so this will only ever select a single element.
+
+-   `p b`: selects all `<b>` nested in `<p>` elements.
+
+-   `[hello]`: selects all elements with a hello attribute.
+
+Check [here](https://www.w3schools.com/cssref/css_selectors.php) for more!
+
+If you don't know exactly what selector you need, I highly recommend using [SelectorGadget](https://rvest.tidyverse.org/articles/selectorgadget.html), which lets you automatically generate the selector you need by supplying positive and negative examples in the browser.
+
+#### Exercice 1
+
+1.  Using `rvest::html_elements`, select all headings from `html_example`.
+2.  Select all elements with class "important".
+3.  Select all elements with id "first".
+4.  Select all headings with class "important".
+5.  Select all `title` and `p` elements.
+6.  Select all hyperlink elements that are nested in a paragraph.
+7.  Select all elements with an `id`.
+
+```{r}
+#1. A comma for several tags
+html_elements(html_example, "h1, h2")
+
+#2. A dot for the class
+html_elements(html_example, ".important")
+
+#3. A hash for an id
+html_elements(html_example, "#first")
+
+#4. Combination of tag and class
+html_elements(html_example, "h2.important")
+
+#5. A comma again
+html_elements(html_example, "title, p")
+
+#6. A blank for nested elements
+html_elements(html_example, "p a")
+
+#7. Square brackets for a target attribute
+html_elements(html_example, "[id]")
+```
+
+### Extract the data
+
+The next step is to extract the text from the selected html elements. To get the text inside a tag, use `html_text` or `html_text2` (squeeze the blanks). To get the text inside an attribute, use `html_attr`.
+
+#### Exercise 2
+
+From `html_example`:
+
+1.  Get all the text.
+2.  Get all the links.
+
+```{r}
+#1.
+html_example %>% 
+  #Text is situated in the head and the body
+  html_elements("head, body") %>% 
+  #html_text2 to extract the text
+  html_text2()
+
+#2.
+html_example %>% 
+  #a tags refer to hyperlinks
+  html_elements("a") %>% 
+  #href is the attribute for the hyperlink
+  html_attr("href")
+```
+
+### Real example -- Exercise 3
+
+In this exercise, we are going to scrape a [Wikipedia page](https://en.wikipedia.org/wiki/Grammy_Award_for_Best_Rap_Album).
+
+  1. Read the page. 
+  2. Extract the table from the "Recipients" section (Hint: check `html_table`).
+  3. Get the names of all (main) recipients and the URL to their Wikipedia page. (Hint: you'll probably need to use regular expressions somewhere. Here's a set of documentation you can use if you've never worked with them: [1](https://evoldyn.gitlab.io/evomics-2018/ref-sheets/R_strings.pdf), [2](https://bookdown.org/f_lennert/book-toolbox_css/digital-trace-data.html#regular-expressions), [3](https://www.datacamp.com/cheat-sheet/regular-expresso).)
+  4. Get the names of all nominees. Who got the most nominations?
+  
+For this exercise, feel free to use the [Selector Gadget](javascript:(function()%7Bvar%20s=document.createElement('div');s.innerHTML='Loading...';s.style.color='black';s.style.padding='20px';s.style.position='fixed';s.style.zIndex='9999';s.style.fontSize='3.0em';s.style.border='2px%20solid%20black';s.style.right='40px';s.style.top='40px';s.setAttribute('class','selector_gadget_loading');s.style.background='white';document.body.appendChild(s);s=document.createElement('script');s.setAttribute('type','text/javascript');s.setAttribute('src','https://dv0akt2986vzh.cloudfront.net/unstable/lib/selectorgadget.js');document.body.appendChild(s);%7D)();) -- just drag it into your bookmarks list. 
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/Grammy_Award_for_Best_Rap_Album"
+
+#1.
+wp <- read_html(url)
+
+#2. 
+tab <- 
+  wp %>% 
+  #Select the table elements with class wikitable. 
+  html_element("table.wikitable") %>% 
+  #Turn into a R data.frame with `html_table` 
+  html_table()
+
+#3.
+#Extract the recipients name with some regex
+recipients <- gsub("·.*", " ", tab$`Recipient(s)`) %>% stringr::str_trim("both")
+
+#With the selector gadget, you can isolate the right css selector to get the 
+#recipients column, including the links (not possible `html_table`).
+wp %>%
+  html_elements(".wikitable td:nth-child(2)") %>% 
+  html_elements("a") %>% 
+  html_attr("href")
+
+#4. 
+#Take the nominees column, split by `\n` to get a list of nominees
+strsplit(tab$Nominees, "\n") %>% 
+  #Only take the nominee name, not the album
+  lapply(function(x) stringr::str_split_i(x, pattern = " – | - ", i = 1)) |>
+  
+  #Some formatting: remove unnecessary space, sort, table.
+  unlist() |>
+  stringr::str_trim() |>
+  table() |>
+  sort(decreasing = TRUE) |>
+  head(n = 10)
+```
+
+
+# 02. APIs to the rescue
+
+APIs (application programming interfaces) are sets of rules that allow different pieces of software to communicate and interact with each other. APIs define the way via which information and data can be exchanged between systems. They are usually not built to be used by an end-user, but rather to be incorporated into another piece of software. 
+In CSS, we encounter APIs usually when we would like to scrape some information for our analyses from the internet. In the next exercise, we will work with the Guardian API and get to know different ways how it can be accessed. [Here](https://open-platform.theguardian.com/documentation/) you can find the official documentation. To make the start a little bit easier, I listed some terminology: 
+
+- Endpoint: An API usually has different endpoints depending on which type of information one wants to retrieve. The Guardian API has an endpoint for content, tags, sections, editions, and single item. 
+- HTTP Methods: They are used to perform different operations on the endpoint, such as `Get` (get data), `POST` (send data), `PUT` (send updates), `DELETE` (delete data). 
+- Requests: HTTP requests are sent to a specific endpoint when querying an API. You can either formulate such a statement yourself, or you can try to find a package that does this for you ;) 
+- Response: APIs respond to a request with a HTTP response. The response usually contains a status message, meta data, as well as the requested piece of information or an error message. Most often, API responses come in JSON or XML format. 
+- Authentication: APIs often require an authentication to ensure secure access. 
+- Rate Limit: Most APIs come with an rate limit (i.e. only so and so many requests are allowed to be sent per time unit). 
+
+#### Exercice 4
+
+Let's try to formulate an HTTP request ourselves and send it to the Guardian API. The `httr` package will help us with this. You can install it via `install.packages("httr")` and attach it via `library(httr)`. [On this website](https://open-platform.theguardian.com/explore/) you can explore how the Guardian API works. The API returns the entries distributed over several pages (by default, 10 articles per page). 
+
+Build an HTTP request (write a url) that searches for articles related to the AI in the technology section between a time window of your choice. Use the `GET` function of the `httr` package to send your request and collect the response. Print the total number of articles that are covered by your search and store the first ten returned articles in a dataframe. Print the number of pages.
+
+(If you, somewhere in the future, were to collect all the found articles, you could simply iterate over all pages).
+
+```{r libraries #1}
+library(httr)
+```
+
+```{r urls}
+#GU_API_KEY <- "ENTER YOUR KEY HERE"
+
+# set parameters
+q <- 'AI' # query term
+sectionName <- "technology"
+fromDate <- "2023-01-01"
+toDate <- "2023-06-12"
+
+# construct HTTP request
+final_url = paste0("https://content.guardianapis.com/search?q=", q, "&section=", sectionName, "&from-date=", fromDate, "&to-date=", toDate, "&page=1&page-size=10&api-key=", API_KEY)
+
+# get response
+response <- GET(final_url)
+
+# check status and content
+status_code(response)   
+content(response)
+
+# retrieve number of articles, number of pages, and construct dataframe
+if (status_code(response) == 200) {
+  content <- content(response, as = "parsed")
+  
+  # Get the total number of articles
+  totalArticles <- content$response$total
+  # Number of pages
+  numberOfPages <- content$response$pages
+  
+  # print results
+  cat("Total articles for", q, ":", totalArticles, "\n")
+  cat("Number of pages for", q, ":", numberOfPages, "\n")
+  
+  # Extract relevant information from the response
+  articles <- content$response$results
+  
+  # Convert the list of articles into a data.frame
+  df <- data.frame(
+    webTitle = sapply(articles, function(x) x$webTitle),
+    sectionName = sapply(articles, function(x) x$sectionName),
+    webPublicationDate = sapply(articles, function(x) x$webPublicationDate)
+  )
+  } else {
+  cat("Error:", status_code(response), "\n")
+}
+```
+
+#### Exercice 5
+
+Writing HTTP requests can be a bit fiddly sometimes. There, however, is help! For many often queried APIs R (or Python) packages are available, which can make life a bit easier. 
+One package for the Guardian API is called `guardianapi`. For this task, select a Guardian journalist who writes about a topic that interests you, find their ID, and use the function `gu_items` to query the number of articles they wrote when. Visualize in a histogram how active they were when and in which sections they got published most frequently. 
+
+```{r libraries #2}
+library(guardianapi)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r guardianapi}
+# enter API key (without quotes)
+gu_api_key(check_env = FALSE)
+
+# send request
+hern_search <- gu_items(query = "profile/alex-hern")#, from_date = fromDate, to_date = toDate)
+tibble::glimpse(hern_search)
+
+# filter data 
+hern_articles <- hern_search %>% 
+  
+  # select columns of interest
+  select(section_id, web_publication_date, web_title) %>% 
+  
+  # filter time window of interest
+  filter(between(web_publication_date, as.Date("2014-01-01"), as.Date("2022-12-31")))
+  
+# Plot a histogram using ggplot2
+ggplot(data = hern_articles, aes(x = web_publication_date)) +
+  scale_x_datetime() + #To account for datetime
+  geom_histogram(binwidth = 3600*24*30, fill = "lightblue", color = "white") +
+  labs(x = "Year", y = "Number of published articles", title = "Number of articles written by Alex Hern over time")
+
+
+# plot histogram showing the sections
+hern_section <- hern_search %>% 
+  filter(!is.na(section_id)) %>% 
+  select(section_id, web_publication_date, web_title) %>%
+  filter(web_publication_date >= as.Date("2014-01-01"),
+         web_publication_date <= as.Date("2022-12-31"))
+
+ggplot(data = hern_section, aes(x = web_publication_date, fill = section_id)) +
+  scale_x_datetime() + #To account for datetime
+  geom_histogram() +
+  scale_colour_discrete() +
+  labs(x = "Year", y = "Number of articles", title = "Number of articles written by Alex Hern over time by category")
+
+```
