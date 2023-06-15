@@ -63,7 +63,7 @@ library(tidyr)
 ### Creating a graph object
 
 The most widely used R packages for (simply) network analysis are called `sna` and `igraph`. 
-To create a graph object, SNA works with matrices as inputs, while this is not the case for IGRAPH. IGRAPH requires igraph objects as inputs. 
+To create a graph object, SNA works with matrices as inputs, while this is not the case for IGRAPH. IGRAPH requires igraph objects as inputs. You can find information on the basic IGRAPH datatypes [here](https://igraph.org/c/doc/igraph-Basic.html).
 
 ```{r martices}
 # In SNA, the basic element is the MATRIX
