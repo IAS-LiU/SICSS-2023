@@ -1,0 +1,127 @@
+---
+title: "workshop-scraping (solutions)"
+author: "Maël Lecoursonnais"
+date: "2023-06-09"
+output: html_document
+---
+
+In this lab, we are going to see how to handle spatial data using OpenStreetMap.
+
+OpenStreetMap (OSM) is a free, open geographic database updated and maintained by a community of volunteers via open collaboration [1](https://en.wikipedia.org/wiki/OpenStreetMap).
+
+It provides an easily accessible API from which we can retrieve spatial data. In R, we can use the `osmdata` package to get tidy output from the API query.
+
+## Prerequisites
+
+```r
+install.packages("tidyverse")
+install.packages("osmdata")
+install.packages("sf")
+install.packages("tmap")
+install.packages("leaflet")
+```
+
+## Retrieving data on OSM
+
+With `osmdata`, a query can be done like this:
+
+  1. Define an area from which you want to collect spatial information. This area is called a **bounding box**. Use `opq` and/or `getbb`. 
+  
+  2. Add the features you want to collect. A list can be found [here](https://wiki.openstreetmap.org/wiki/Map_features) (or use `osmdata::available_features()`). A feature consists of a key (a broad category, e.g. a building) and a value (e.g., a church). Use `add_osm_feature`.
+  
+  3. Convert the result to a `sf` object. Use `osmdata_sf`.
+
+For instance, let's find out the schools of Norrköping:
+```{r include=FALSE}
+library(tidyverse)
+library(osmdata)
+library(sf)
+
+nkpg_schools <- 
+  #Create the query and set the bounding box
+  opq(bbox = "Norrköping") %>% 
+  #Select the features
+  add_osm_feature(key = "amenity", value = "school") %>%
+  #Convert to osmdata_sf
+  osmdata_sf()
+```
+
+OSM data can be a bit messy, since this is a collaborative effort. Here, schools are sometimes points, lines, polygons, or multipolygons.
+
+## Mapping data
+
+It is a bit uncertain as to what we captured with this query: are the schools really in Norrköping? Are they really schools? It's always better to double-check with a map! Hello.
+
+Here, there are two options: static or interactive maps. Several packages allow to map `sf` objects. We are going to focus on `ggplot2` for static maps and `tmap` for interactive ones. `leaflet` is also a good options for interactive maps.
+
+```{r}
+library(tmap)
+tmap_mode("view") #Set interactive mode
+
+#Create a data.frame with all schools. Careful, this data.frame includes multiple geometries!
+nkpg_schools_sf <- bind_rows(
+  st_make_valid(nkpg_schools$osm_multipolygons),
+  nkpg_schools$osm_polygons[!is.na(nkpg_schools$osm_polygons$name), ],
+  nkpg_schools$osm_points[!is.na(nkpg_schools$osm_points$name), ]
+  ) 
+
+#Map
+tm_basemap("Esri.WorldGrayCanvas") +
+  tm_shape(nkpg_schools_sf) +
+  tm_polygons(popup.vars = "name") +
+  tm_shape(nkpg_schools_sf[st_dimension(nkpg_schools_sf) == 0, ]) +
+  tm_dots(popup.vars = "name")
+```
+
+## Exercise 1
+
+  1. Using the pipeline described above, find all the hospitals in Stockholm.
+  2. Map the hospitals.
+  
+```{r}
+sklm_hospitals <- 
+  #Create the query and set the bounding box
+  opq(bbox = "Stockholm") %>% 
+  #Select the features
+  add_osm_feature(key = "amenity", value = "hospital") %>%
+  #Convert to osmdata_sf
+  osmdata_sf()
+
+sklm_hospitals_sf <- bind_rows(
+  st_make_valid(sklm_hospitals$osm_multipolygons),
+  sklm_hospitals$osm_polygons[!is.na(sklm_hospitals$osm_polygons$name), ],
+  sklm_hospitals$osm_points[!is.na(sklm_hospitals$osm_points$name), ]
+  ) 
+
+tm_basemap("Esri.WorldGrayCanvas") +
+  tm_shape(sklm_hospitals_sf) +
+  tm_polygons(popup.vars = "name") +
+  tm_shape(sklm_hospitals_sf[st_dimension(sklm_hospitals_sf) == 0, ]) +
+  tm_dots(popup.vars = "name")
+```
+
+## Exercise 2
+
+Using `osmdata::getbb`, get the boundaries of the city of Paris, and of Sweden. Check `?getbb`.
+
+```{r}
+#Paris 
+paris <- getbb("Paris, France", format_out = 'sf_polygon', featuretype = "settlement")
+plot(st_geometry(paris))
+
+#Sweden
+sweden <- getbb("Sweden", format_out = 'sf_polygon', featuretype = "country")
+plot(sweden$multipolygon)
+```
+
+  
+
+
+
+
+
+
+
+
+
+
