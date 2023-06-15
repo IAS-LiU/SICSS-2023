@@ -1,0 +1,24 @@
+.center{
+    margin: 0!important;
+    height: 40px;
+}
+
+.caption-right{
+  text-align: right;
+}
+
+.callout-body .callout.callout-style-default{
+    font-size: 2.0em!important;
+}
+
+.my_background{
+    background-image: url("images/map_bgd.png");
+    background-position: right;
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.reveal img {
+  max-width: 150%;
+  overflow-x: hidden;
+}
