@@ -299,3 +299,5 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/r,python,macos,windows,jupyternotebooks
+
+./day_4_network_analysis/DS_Store
