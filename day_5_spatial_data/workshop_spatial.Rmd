@@ -32,7 +32,7 @@ With `osmdata`, a query can be done like this:
   3. Convert the result to a `sf` object. Use `osmdata_sf`.
 
 For instance, let's find out the schools of Norrköping:
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE, output=FALSE}
 library(tidyverse)
 library(osmdata)
 library(sf)
