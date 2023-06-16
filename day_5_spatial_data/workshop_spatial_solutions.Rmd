@@ -1,5 +1,5 @@
 ---
-title: "workshop-scraping (solutions)"
+title: "workshop-spatial (solutions)"
 author: "Maël Lecoursonnais"
 date: "2023-06-09"
 output: html_document
